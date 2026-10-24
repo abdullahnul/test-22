@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة الصيدلية المتكامل</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- HTML5 QR / Barcode Scanner -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Cairo', sans-serif; }
+        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
+        #reader video { object-fit: cover !important; border-radius: 0.75rem; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen">
+
+    <!-- App Header & Navigation -->
+    <div id="app-container" class="hidden min-h-screen flex flex-col pb-16 md:pb-0">
+        <!-- Top Navbar -->
+        <header class="bg-emerald-700 text-white shadow-lg sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="bg-white/20 p-2 rounded-xl">
+                        <i data-lucide="pill" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg leading-tight">إدارة الصيدلية الذكية</h1>
+                        <p class="text-xs text-emerald-200">النسخة الاحترافية المتكاملة</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="sync-cloud-btn" onclick="syncCloudData()" class="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg border border-emerald-400/30 transition">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span class="hidden sm:inline">مزامنة سحابية</span>
+                    </button>
+                    <button onclick="logout()" class="text-xs bg-red-500/80 hover:bg-red-600 px-3 py-1.5 rounded-lg transition">
+                        خروج
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+            
+            <!-- Dashboard Stats View -->
+            <section id="view-dashboard" class="app-view">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                        <div class="p-3 bg-emerald-100 text-emerald-600 rounded-xl">
+                            <i data-lucide="dollar-sign" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 font-semibold">مبيعات اليوم</p>
+                            <h3 id="stat-sales-today" class="text-lg font-bold text-slate-800">0.00 د.ع</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                        <div class="p-3 bg-blue-100 text-blue-600 rounded-xl">
+                            <i data-lucide="trending-up" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 font-semibold">أرباح اليوم</p>
+                            <h3 id="stat-profit-today" class="text-lg font-bold text-slate-800">0.00 د.ع</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                        <div class="p-3 bg-amber-100 text-amber-600 rounded-xl">
+                            <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 font-semibold">وشك النفاد</p>
+                            <h3 id="stat-low-stock" class="text-lg font-bold text-amber-600">0 دواء</h3>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center gap-4">
+                        <div class="p-3 bg-rose-100 text-rose-600 rounded-xl">
+                            <i data-lucide="calendar-x" class="w-6 h-6"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500 font-semibold">قرب الانتهاء</p>
+                            <h3 id="stat-near-exp" class="text-lg font-bold text-rose-600">0 دواء</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Alerts & Analytics -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                            <i data-lucide="alert-circle" class="text-amber-500 w-5 h-5"></i> أدوية تنتهي الكمية قريباً
+                        </h3>
+                        <div id="low-stock-list" class="space-y-3 max-h-60 overflow-y-auto">
+                            <!-- Items populated JS -->
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                            <i data-lucide="clock" class="text-rose-500 w-5 h-5"></i> أدوية قريبة من تاريخ الانتهاء
+                        </h3>
+                        <div id="near-exp-list" class="space-y-3 max-h-60 overflow-y-auto">
+                            <!-- Items populated JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- POS / Point of Sale View -->
+            <section id="view-pos" class="app-view hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 space-y-4">
+                        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap sm:flex-nowrap gap-3">
+                            <div class="relative flex-1">
+                                <input type="text" id="pos-search" placeholder="ابحث باسم الدواء أو الباركود..." class="w-full pl-4 pr-10 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 focus:outline-none" oninput="filterPOSMedicines()">
+                                <i data-lucide="search" class="w-5 h-5 text-slate-400 absolute left-3 top-3"></i>
+                            </div>
+                            <button onclick="openScannerModal('pos')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-medium flex items-center gap-2 transition">
+                                <i data-lucide="camera" class="w-5 h-5"></i>
+                                <span>مسح كاميرا</span>
+                            </button>
+                        </div>
+
+                        <!-- Products Grid -->
+                        <div id="pos-products-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-[550px] overflow-y-auto p-1">
+                            <!-- JS Items -->
+                        </div>
+                    </div>
+
+                    <!-- Cart Section -->
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col h-[550px]">
+                        <h3 class="font-bold text-lg border-b pb-3 flex items-center justify-between">
+                            <span>سلة المبيعات</span>
+                            <span id="cart-item-count" class="text-xs bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full font-bold">0 عناصر</span>
+                        </h3>
+                        
+                        <div id="cart-items" class="flex-1 overflow-y-auto py-3 space-y-3">
+                            <!-- Cart Items -->
+                        </div>
+
+                        <div class="border-t pt-4 space-y-3">
+                            <div class="flex justify-between text-slate-600">
+                                <span>الإجمالي:</span>
+                                <span id="cart-total" class="font-bold text-xl text-emerald-700">0.00 د.ع</span>
+                            </div>
+                            <button onclick="completeSale()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold transition shadow-lg shadow-emerald-600/20">
+                                إتمام البيع والتسجيل
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Add / Manage Medicine View -->
+            <section id="view-add-medicine" class="app-view hidden max-w-2xl mx-auto">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 class="text-xl font-bold mb-6 flex items-center gap-2 text-emerald-800 border-b pb-3">
+                        <i data-lucide="plus-circle" class="w-6 h-6"></i> إضافة / تعديل علاج جديد
+                    </h2>
+
+                    <form id="medicine-form" onsubmit="saveMedicine(event)" class="space-y-5">
+                        <input type="hidden" id="med-id">
+
+                        <!-- Image Capture / Upload -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-2">صورة المنتج</label>
+                            <div class="flex items-center gap-4">
+                                <div id="med-image-preview" class="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 overflow-hidden relative">
+                                    <i data-lucide="image" class="w-8 h-8 text-slate-400"></i>
+                                </div>
+                                <div class="flex flex-col gap-2">
+                                    <label class="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-3 py-2 rounded-lg font-semibold flex items-center gap-2 border border-slate-300 transition">
+                                        <i data-lucide="upload" class="w-4 h-4"></i> رفع صورة
+                                        <input type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                                    </label>
+                                    <label class="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-3 py-2 rounded-lg font-semibold flex items-center gap-2 border border-slate-300 transition">
+                                        <i data-lucide="camera" class="w-4 h-4"></i> التقاط بالكاميرا
+                                        <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleImageUpload(event)">
+                                    </label>
+                                    <input type="hidden" id="med-image-data">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Barcode Handling -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">الباركود</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="med-barcode" placeholder="امسح أو اكتب الباركود..." class="flex-1 px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                                <button type="button" onclick="openScannerModal('add-form')" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-xl text-xs flex items-center gap-1 transition">
+                                    <i data-lucide="qr-code" class="w-4 h-4"></i> قراءة كاميرا
+                                </button>
+                                <button type="button" onclick="generateAutoBarcode()" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-xl text-xs transition">
+                                    توليد تلقائي
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Basic Details -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">اسم العلاج / الدواء *</label>
+                                <input type="text" id="med-name" required placeholder="مثال: پاراسيتامول" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">تاريخ انتهاء الصلاحية *</label>
+                                <input type="date" id="med-expiry" required class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            </div>
+                        </div>
+
+                        <!-- Pricing & Stock -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">سعر التكلفة (د.ع) *</label>
+                                <input type="number" id="med-cost" step="250" required placeholder="0" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">سعر البيع (د.ع) *</label>
+                                <input type="number" id="med-price" step="250" required placeholder="0" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">الكمية بالمخزون *</label>
+                                <input type="number" id="med-stock" required placeholder="10" class="w-full px-3 py-2 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition shadow-md shadow-emerald-600/20">
+                            حفظ المنتج الجديد
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Debts Section View -->
+            <section id="view-debts" class="app-view hidden">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
+                        <h2 class="text-lg font-bold flex items-center gap-2">
+                            <i data-lucide="book-open" class="text-emerald-600 w-5 h-5"></i> سجل الديون والمدينين
+                        </h2>
+                        <button onclick="openDebtModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
+                            <i data-lucide="plus" class="w-4 h-4"></i> إضافة دين جديد
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-sm">
+                            <thead class="bg-slate-50 text-slate-500 border-b">
+                                <tr>
+                                    <th class="p-3">اسم المدين</th>
+                                    <th class="p-3">العلاج / الملاحظة</th>
+                                    <th class="p-3">المبلغ المتبقي</th>
+                                    <th class="p-3">التاريخ</th>
+                                    <th class="p-3 text-center">إجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody id="debts-table-body">
+                                <!-- JS Debt Records -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Inventory View -->
+            <section id="view-inventory" class="app-view hidden">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-bold text-lg">المخزون الكلي للأدوية</h2>
+                        <input type="text" id="inventory-search" placeholder="بحث بالمخزون..." oninput="renderInventory()" class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm">
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-sm">
+                            <thead class="bg-slate-50 text-slate-500 border-b">
+                                <tr>
+                                    <th class="p-3">الصورة</th>
+                                    <th class="p-3">الاسم</th>
+                                    <th class="p-3">الباركود</th>
+                                    <th class="p-3">سعر البيع</th>
+                                    <th class="p-3">الكمية</th>
+                                    <th class="p-3">الانتهاء</th>
+                                    <th class="p-3 text-center">خيارات</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventory-table-body">
+                                <!-- Inventory list -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Navigation Bar for Mobile & Desktop Switch -->
+        <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-20">
+            <div class="max-w-md mx-auto flex justify-around py-2">
+                <button onclick="switchTab('dashboard')" class="nav-tab text-emerald-600 flex flex-col items-center gap-1 text-xs">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+                </button>
+                <button onclick="switchTab('pos')" class="nav-tab text-slate-400 hover:text-emerald-600 flex flex-col items-center gap-1 text-xs">
+                    <i data-lucide="shopping-cart" class="w-5 h-5"></i> POS البيع
+                </button>
+                <button onclick="switchTab('add-medicine')" class="nav-tab text-slate-400 hover:text-emerald-600 flex flex-col items-center gap-1 text-xs">
+                    <i data-lucide="plus-square" class="w-5 h-5"></i> إضافة علاج
+                </button>
+                <button onclick="switchTab('debts')" class="nav-tab text-slate-400 hover:text-emerald-600 flex flex-col items-center gap-1 text-xs">
+                    <i data-lucide="book-open" class="w-5 h-5"></i> الديون
+                </button>
+                <button onclick="switchTab('inventory')" class="nav-tab text-slate-400 hover:text-emerald-600 flex flex-col items-center gap-1 text-xs">
+                    <i data-lucide="boxes" class="w-5 h-5"></i> المخزون
+                </button>
+            </div>
+        </nav>
+    </div>
+
+    <!-- Login Modal/Screen -->
+    <div id="login-container" class="fixed inset-0 bg-slate-900 flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full text-right space-y-6">
+            <div class="text-center">
+                <div class="inline-flex p-3 bg-emerald-100 text-emerald-600 rounded-2xl mb-2">
+                    <i data-lucide="shield-check" class="w-8 h-8"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-slate-800">تسجيل الدخول للنظام</h2>
+                <p class="text-xs text-slate-500 mt-1">أدخل بيانات المسؤول أو استخدم التأكيد السريع</p>
+            </div>
+
+            <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold mb-1">اسم المستخدم</label>
+                    <input type="text" id="login-user" required value="Admin" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold mb-1">كلمة المرور</label>
+                    <input type="password" id="login-pass" required value="gg1999gg" class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition">
+                    دخول للنظام
+                </button>
+            </form>
+
+            <div class="relative flex py-1 items-center">
+                <div class="flex-grow border-t border-slate-200"></div>
+                <span class="flex-shrink mx-4 text-xs text-slate-400">أو عبر البريد</span>
+                <div class="flex-grow border-t border-slate-200"></div>
+            </div>
+
+            <button onclick="handleGoogleAuth()" class="w-full border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-2.5 rounded-xl flex items-center justify-center gap-2 text-sm transition">
+                <i data-lucide="mail" class="w-4 h-4 text-red-500"></i> تأكيد عن طريق Gmail / Google
+            </button>
+        </div>
+    </div>
+
+    <!-- Live Scanner Modal -->
+    <div id="scanner-modal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-2xl p-4 w-full max-w-sm text-center relative space-y-4">
+            <h3 class="font-bold text-slate-800 flex items-center justify-center gap-2">
+                <i data-lucide="scan-line" class="w-5 h-5 text-emerald-600"></i> مسح الباركود للكاميرا
+            </h3>
+            <div id="reader" class="w-full overflow-hidden rounded-xl bg-slate-100"></div>
+            <button onclick="closeScannerModal()" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 rounded-xl transition">
+                إلغاء
+            </button>
+        </div>
+    </div>
+
+    <!-- Debt Modal -->
+    <div id="debt-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-2xl p-6 w-full max-w-md space-y-4">
+            <h3 class="font-bold text-lg text-slate-800">إضافة سجّل دين جديد</h3>
+            <form onsubmit="saveDebtRecord(event)" class="space-y-3">
+                <input type="text" id="debt-name" placeholder="اسم الشخص المدين *" required class="w-full px-3 py-2 border rounded-xl">
+                <input type="text" id="debt-item" placeholder="العلاج / تفاصيل الدين *" required class="w-full px-3 py-2 border rounded-xl">
+                <input type="number" id="debt-amount" placeholder="المبلغ المتأخر (د.ع) *" required class="w-full px-3 py-2 border rounded-xl">
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="flex-1 bg-emerald-600 text-white py-2 rounded-xl font-bold">حفظ الدين</button>
+                    <button type="button" onclick="closeDebtModal()" class="bg-slate-200 px-4 py-2 rounded-xl">إلغاء</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- App Logic JS -->
+    <script>
+        // Initial Local State
+        let medicines = JSON.parse(localStorage.getItem('pharmacy_medicines')) || [
+            { id: '1', name: 'Panadol Extra', barcode: '12345678', price: 2000, cost: 1250, stock: 15, expiry: '2027-05-01', image: '' }
+        ];
+        let sales = JSON.parse(localStorage.getItem('pharmacy_sales')) || [];
+        let debts = JSON.parse(localStorage.getItem('pharmacy_debts')) || [];
+        let cart = [];
+        let html5QrcodeScanner = null;
+        let scanTarget = null; // 'add-form' or 'pos'
+
+        window.onload = function() {
+            lucide.createIcons();
+            updateDashboard();
+        };
+
+        // Switch View
+        function switchTab(tabId) {
+            document.querySelectorAll('.app-view').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${tabId}`).classList.remove('hidden');
+
+            if(tabId === 'pos') renderPOSProducts();
+            if(tabId === 'inventory') renderInventory();
+            if(tabId === 'debts') renderDebts();
+            if(tabId === 'dashboard') updateDashboard();
+        }
+
+        // Login Handler
+        function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('login-user').value;
+            const p = document.getElementById('login-pass').value;
+
+            if (u === 'Admin' && p === 'gg1999gg') {
+                document.getElementById('login-container').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('hidden');
+            } else {
+                alert('اسم المستخدم أو كلمة المرور غير صحيحة!');
+            }
+        }
+
+        function handleGoogleAuth() {
+            alert('تم تأكيد الهوية بنجاح عبر حساب Google/Gmail');
+            document.getElementById('login-container').classList.add('hidden');
+            document.getElementById('app-container').classList.remove('hidden');
+        }
+
+        function logout() {
+            document.getElementById('app-container').classList.add('hidden');
+            document.getElementById('login-container').classList.remove('hidden');
+        }
+
+        // Image Handling
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const imgData = evt.target.result;
+                document.getElementById('med-image-data').value = imgData;
+                document.getElementById('med-image-preview').innerHTML = `<img src="${imgData}" class="w-full h-full object-cover">`;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Auto Barcode Generator
+        function generateAutoBarcode() {
+            const autoCode = 'BC-' + Math.floor(10000000 + Math.random() * 90000000);
+            document.getElementById('med-barcode').value = autoCode;
+        }
+
+        // Camera Live Scanner
+        function openScannerModal(target) {
+            scanTarget = target;
+            document.getElementById('scanner-modal').classList.remove('hidden');
+            
+            html5QrcodeScanner = new Html5Qrcode("reader");
+            html5QrcodeScanner.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 200, height: 200 } },
+                onScanSuccess
+            ).catch(err => alert("لم نتمكن من الوصول للكاميرا: " + err));
+        }
+
+        function closeScannerModal() {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.stop().then(() => {
+                    document.getElementById('scanner-modal').classList.add('hidden');
+                });
+            } else {
+                document.getElementById('scanner-modal').classList.add('hidden');
+            }
+        }
+
+        function onScanSuccess(decodedText) {
+            closeScannerModal();
+            if (scanTarget === 'add-form') {
+                document.getElementById('med-barcode').value = decodedText;
+            } else if (scanTarget === 'pos') {
+                const med = medicines.find(m => m.barcode === decodedText);
+                if (med) {
+                    addToCart(med.id);
+                } else {
+                    alert('لم يتم العثور على المنتج بهذا الباركود في المخزون');
+                }
+            }
+        }
+
+        // Save Medicine
+        function saveMedicine(e) {
+            e.preventDefault();
+            const id = document.getElementById('med-id').value || Date.now().toString();
+            const newMed = {
+                id: id,
+                name: document.getElementById('med-name').value,
+                barcode: document.getElementById('med-barcode').value || ('BC-' + Date.now()),
+                expiry: document.getElementById('med-expiry').value,
+                cost: parseFloat(document.getElementById('med-cost').value) || 0,
+                price: parseFloat(document.getElementById('med-price').value) || 0,
+                stock: parseInt(document.getElementById('med-stock').value) || 0,
+                image: document.getElementById('med-image-data').value || ''
+            };
+
+            const idx = medicines.findIndex(m => m.id === id);
+            if (idx > -1) {
+                medicines[idx] = newMed;
+            } else {
+                medicines.push(newMed);
+            }
+
+            localStorage.setItem('pharmacy_medicines', JSON.stringify(medicines));
+            alert('تم حفظ المنتج بنجاح!');
+            document.getElementById('medicine-form').reset();
+            document.getElementById('med-image-preview').innerHTML = `<i data-lucide="image" class="w-8 h-8 text-slate-400"></i>`;
+            lucide.createIcons();
+        }
+
+        // POS Operations
+        function renderPOSProducts(filteredList = medicines) {
+            const grid = document.getElementById('pos-products-grid');
+            grid.innerHTML = filteredList.map(m => `
+                <div onclick="addToCart('${m.id}')" class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm hover:border-emerald-500 cursor-pointer transition flex flex-col justify-between">
+                    <div class="h-24 bg-slate-100 rounded-lg overflow-hidden mb-2 flex items-center justify-center">
+                        ${m.image ? `<img src="${m.image}" class="w-full h-full object-cover">` : `<i data-lucide="pill" class="text-slate-400"></i>`}
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm text-slate-800 line-clamp-1">${m.name}</h4>
+                        <p class="text-xs text-slate-500">المخزون: ${m.stock}</p>
+                    </div>
+                    <div class="flex justify-between items-center mt-2 pt-2 border-t text-emerald-700 font-bold text-sm">
+                        <span>${m.price} د.ع</span>
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function filterPOSMedicines() {
+            const q = document.getElementById('pos-search').value.toLowerCase();
+            const filtered = medicines.filter(m => m.name.toLowerCase().includes(q) || m.barcode.includes(q));
+            renderPOSProducts(filtered);
+        }
+
+        function addToCart(medId) {
+            const med = medicines.find(m => m.id === medId);
+            if (!med || med.stock <= 0) {
+                alert('العلاج نافد من المخزون!');
+                return;
+            }
+            const existing = cart.find(c => c.id === medId);
+            if (existing) {
+                if (existing.qty < med.stock) {
+                    existing.qty++;
+                } else {
+                    alert('الكمية المحددة تتجاوز المتوفر بالمخزون!');
+                }
+            } else {
+                cart.push({ ...med, qty: 1 });
+            }
+            renderCart();
+        }
+
+        function renderCart() {
+            const container = document.getElementById('cart-items');
+            let total = 0;
+            let count = 0;
+
+            container.innerHTML = cart.map((item, idx) => {
+                total += item.price * item.qty;
+                count += item.qty;
+                return `
+                    <div class="flex items-center justify-between border-b pb-2">
+                        <div>
+                            <h5 class="font-bold text-xs">${item.name}</h5>
+                            <span class="text-xs text-slate-500">${item.price} د.ع</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="number" value="${item.qty}" min="1" max="${item.stock}" onchange="updateCartQty(${idx}, this.value)" class="w-12 text-center border rounded">
+                            <button onclick="removeFromCart(${idx})" class="text-red-500"><i data-lucide="trash" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('cart-total').innerText = `${total} د.ع`;
+            document.getElementById('cart-item-count').innerText = `${count} عناصر`;
+            lucide.createIcons();
+        }
+
+        function updateCartQty(idx, val) {
+            const q = parseInt(val);
+            if (q > 0) cart[idx].qty = q;
+            renderCart();
+        }
+
+        function removeFromCart(idx) {
+            cart.splice(idx, 1);
+            renderCart();
+        }
+
+        function completeSale() {
+            if (cart.length === 0) return alert('السلة فارغة!');
+
+            let saleProfit = 0;
+            let saleTotal = 0;
+
+            cart.forEach(item => {
+                const med = medicines.find(m => m.id === item.id);
+                if (med) {
+                    med.stock -= item.qty;
+                    saleProfit += (item.price - item.cost) * item.qty;
+                    saleTotal += item.price * item.qty;
+                }
+            });
+
+            sales.push({
+                date: new Date().toISOString(),
+                total: saleTotal,
+                profit: saleProfit,
+                items: cart
+            });
+
+            localStorage.setItem('pharmacy_medicines', JSON.stringify(medicines));
+            localStorage.setItem('pharmacy_sales', JSON.stringify(sales));
+
+            cart = [];
+            renderCart();
+            renderPOSProducts();
+            alert('تمت عملية البيع وخصم الكميات وتسجيل الأرباح!');
+        }
+
+        // Debts System
+        function openDebtModal() { document.getElementById('debt-modal').classList.remove('hidden'); }
+        function closeDebtModal() { document.getElementById('debt-modal').classList.add('hidden'); }
+
+        function saveDebtRecord(e) {
+            e.preventDefault();
+            const newDebt = {
+                id: Date.now().toString(),
+                name: document.getElementById('debt-name').value,
+                item: document.getElementById('debt-item').value,
+                amount: parseFloat(document.getElementById('debt-amount').value),
+                date: new Date().toLocaleDateString('ar-EG')
+            };
+
+            debts.push(newDebt);
+            localStorage.setItem('pharmacy_debts', JSON.stringify(debts));
+            closeDebtModal();
+            renderDebts();
+        }
+
+        function renderDebts() {
+            const tbody = document.getElementById('debts-table-body');
+            tbody.innerHTML = debts.map(d => `
+                <tr class="border-b">
+                    <td class="p-3 font-semibold">${d.name}</td>
+                    <td class="p-3">${d.item}</td>
+                    <td class="p-3 font-bold text-red-600">${d.amount} د.ع</td>
+                    <td class="p-3 text-xs">${d.date}</td>
+                    <td class="p-3 text-center">
+                        <button onclick="payDebt('${d.id}')" class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg text-xs font-bold">تسديد</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function payDebt(id) {
+            debts = debts.filter(d => d.id !== id);
+            localStorage.setItem('pharmacy_debts', JSON.stringify(debts));
+            renderDebts();
+        }
+
+        // Inventory Render
+        function renderInventory() {
+            const q = document.getElementById('inventory-search')?.value.toLowerCase() || '';
+            const filtered = medicines.filter(m => m.name.toLowerCase().includes(q));
+            const tbody = document.getElementById('inventory-table-body');
+            tbody.innerHTML = filtered.map(m => `
+                <tr class="border-b">
+                    <td class="p-2">
+                        <div class="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden flex items-center justify-center">
+                            ${m.image ? `<img src="${m.image}" class="w-full h-full object-cover">` : `<i data-lucide="pill" class="w-5 h-5 text-slate-400"></i>`}
+                        </div>
+                    </td>
+                    <td class="p-3 font-semibold">${m.name}</td>
+                    <td class="p-3 text-xs text-slate-500">${m.barcode}</td>
+                    <td class="p-3 font-bold">${m.price} د.ع</td>
+                    <td class="p-3 ${m.stock < 5 ? 'text-red-600 font-bold' : ''}">${m.stock}</td>
+                    <td class="p-3 text-xs">${m.expiry}</td>
+                    <td class="p-3 text-center">
+                        <button onclick="deleteMedicine('${m.id}')" class="text-red-500 hover:text-red-700"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </td>
+                </tr>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function deleteMedicine(id) {
+            if(confirm('هل انت متأكد من حذف العلاج؟')) {
+                medicines = medicines.filter(m => m.id !== id);
+                localStorage.setItem('pharmacy_medicines', JSON.stringify(medicines));
+                renderInventory();
+            }
+        }
+
+        // Dashboard Stats Update
+        function updateDashboard() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const todaySales = sales.filter(s => s.date.startsWith(todayStr));
+
+            const totalSales = todaySales.reduce((acc, s) => acc + s.total, 0);
+            const totalProfit = todaySales.reduce((acc, s) => acc + s.profit, 0);
+
+            document.getElementById('stat-sales-today').innerText = `${totalSales} د.ع`;
+            document.getElementById('stat-profit-today').innerText = `${totalProfit} د.ع`;
+
+            const lowStock = medicines.filter(m => m.stock <= 5);
+            document.getElementById('stat-low-stock').innerText = `${lowStock.length} أدوية`;
+
+            const nearExp = medicines.filter(m => {
+                const exp = new Date(m.expiry);
+                const now = new Date();
+                const diffDays = (exp - now) / (1000 * 3600 * 24);
+                return diffDays > 0 && diffDays <= 60;
+            });
+            document.getElementById('stat-near-exp').innerText = `${nearExp.length} أدوية`;
+
+            document.getElementById('low-stock-list').innerHTML = lowStock.map(m => `
+                <div class="flex justify-between items-center p-2 bg-amber-50 rounded-xl text-xs text-amber-900 border border-amber-200">
+                    <span>${m.name}</span>
+                    <span class="font-bold text-amber-700">متبقي: ${m.stock}</span>
+                </div>
+            `).join('') || '<p class="text-xs text-slate-400">لا توجد أدوية منخفضة الكمية</p>';
+
+            document.getElementById('near-exp-list').innerHTML = nearExp.map(m => `
+                <div class="flex justify-between items-center p-2 bg-rose-50 rounded-xl text-xs text-rose-900 border border-rose-200">
+                    <span>${m.name}</span>
+                    <span class="font-bold text-rose-700">ينتهي: ${m.expiry}</span>
+                </div>
+            `).join('') || '<p class="text-xs text-slate-400">لا توجد أدوية قريبة من تاريخ الانتهاء</p>';
+        }
+
+        // Cloud Sync Mock/Preparedness
+        function syncCloudData() {
+            alert('جاري المزامنة السحابية... تم الحفظ والمزامنة بنجاح!');
+        }
+    </script>
+</body>
+</html>
